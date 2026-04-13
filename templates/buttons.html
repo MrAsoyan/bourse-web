@@ -1,0 +1,56 @@
+<form method="post">
+    <label for="symbol">Symbol :</label>
+    <select name="symbol">
+        <option value="AAPL">AAPL</option>
+        <option value="GOOG">GOOG</option>
+        <!-- Ajouter dynamiquement via backend -->
+    </select><br><br>
+
+    <label for="an">Année :</label>
+    <input type="range" name="an" min="2000" max="2025" value="2018">
+    <span id="an-value">2018</span><br><br>
+
+    <label for="mode">Mode d'affichage :</label><br>
+    <select name="mode" multiple>
+        <option value="Price" selected>Price</option>
+        <option value="SavGol">SavGol</option>
+        <option value="Both">Both</option>
+        <option value="Volume">Volume</option>
+    </select><br><br>
+
+    <label for="zoom">Zoom :</label>
+    <input type="range" name="zoom" min="1" max="10" step="0.1" value="1"><br><br>
+
+    <label for="win">Window size :</label>
+    <input type="range" name="win" min="2" max="90" value="37"><br><br>
+
+    <label for="date1">Zoom date 1 :</label>
+    <input type="date" name="date1" value="2024-01-01"><br><br>
+
+    <label for="date2">Zoom date 2 :</label>
+    <input type="date" name="date2" value="2024-12-31"><br><br>
+
+    <label>Options :</label><br>
+    <input type="checkbox" name="CHECK" checked> Cumuler les années<br>
+    <input type="checkbox" name="CHECK2"> Correlation<br>
+    <input type="checkbox" name="CHECK3"> interf_prod<br>
+    <input type="checkbox" name="CHECK4"> interf_sum<br>
+    <input type="checkbox" name="CHECK5"> Grids<br>
+    <input type="checkbox" name="CHECK6"> SL<br>
+    <input type="checkbox" name="CHECK7"> SpirM<br>
+    <input type="checkbox" name="CHECK8"> Spir3M<br>
+    <input type="checkbox" name="CHECK9"> SpirA<br>
+    <input type="checkbox" name="CHECK10"> Exclude COVID<br>
+    <input type="checkbox" name="CHECK11"> Heart Attack<br>
+    <input type="checkbox" name="CHECK12"> SL SHORT<br><br>
+
+    <label>Années à afficher :</label><br>
+    <input type="checkbox" name="_2020"> 2020
+    <input type="checkbox" name="_2021"> 2021
+    <input type="checkbox" name="_2022"> 2022
+    <input type="checkbox" name="_2023"> 2023
+    <input type="checkbox" name="_2024"> 2024
+    <input type="checkbox" name="_2025"> 2025<br><br>
+
+    <button type="submit">Appliquer</button>
+</form>

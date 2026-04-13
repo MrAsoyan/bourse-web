@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NOYB2 — Analyse Polaire</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f1117;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        header {
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        header h1 { font-size: 20px; font-weight: 600; color: #58a6ff; }
+        header .subtitle { font-size: 13px; color: #8b949e; }
+        .layout { display: flex; height: calc(100vh - 52px); }
+
+        /* ---- Sidebar ---- */
+        .sidebar {
+            width: 340px; min-width: 340px;
+            background: #161b22;
+            border-right: 1px solid #30363d;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+        .section { margin-bottom: 16px; }
+        .section-title {
+            font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+            color: #8b949e; margin-bottom: 6px; font-weight: 600;
+        }
+        label { display: block; font-size: 12px; color: #c9d1d9; margin-bottom: 3px; }
+        select, input[type="text"], input[type="number"], input[type="date"] {
+            width: 100%; padding: 6px 8px; background: #0d1117;
+            border: 1px solid #30363d; border-radius: 6px;
+            color: #e0e0e0; font-size: 13px; margin-bottom: 8px;
+        }
+        select:focus, input:focus { outline: none; border-color: #58a6ff; }
+        select[multiple] { height: 80px; }
+        .range-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .range-row input[type="range"] { flex: 1; accent-color: #58a6ff; }
+        .range-val {
+            min-width: 36px; text-align: right; font-size: 12px;
+            color: #58a6ff; font-weight: 600;
+        }
+        .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+        .cb-item {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 12px; cursor: pointer; padding: 3px 0;
+        }
+        .cb-item input[type="checkbox"] { accent-color: #58a6ff; width: 14px; height: 14px; }
+        .year-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+        .year-btn {
+            padding: 4px 10px; font-size: 12px;
+            border: 1px solid #30363d; border-radius: 4px;
+            background: #0d1117; color: #c9d1d9; cursor: pointer;
+            transition: all 0.15s;
+        }
+        .year-btn.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+        .year-btn:hover { border-color: #58a6ff; }
+        .symbol-input-row { display: flex; gap: 6px; margin-bottom: 8px; }
+        .symbol-input-row select, .symbol-input-row input { flex: 1; margin-bottom: 0; }
+        .dates-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+        /* ---- Main ---- */
+        .main {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; overflow-y: auto; padding: 24px;
+        }
+        #status-bar {
+            font-size: 12px; color: #8b949e; margin-bottom: 8px; min-height: 18px;
+        }
+        #status-bar.loading { color: #58a6ff; }
+        #status-bar.error { color: #f85149; }
+        canvas#polar {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+        }
+        #info-panel {
+            max-width: 700px; width: 100%; margin-top: 12px; font-size: 13px;
+        }
+        .info-line {
+            padding: 3px 0; color: #8b949e;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+        #day-label { color: #58a6ff; font-size: 14px; font-weight: 600; margin-top: 8px; }
+        #corr-container {
+            max-width: 700px; width: 100%; margin-top: 12px; overflow-x: auto;
+        }
+        table.corr-table { border-collapse: collapse; font-size: 12px; font-family: monospace; }
+        .corr-table th, .corr-table td {
+            border: 1px solid #30363d; padding: 4px 8px; text-align: right;
+        }
+        .corr-table th { background: #21262d; color: #58a6ff; }
+        .corr-table td { color: #c9d1d9; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>NOYB2</h1>
+    <span class="subtitle">Analyse polaire &amp; interferences cycliques</span>
+</header>
+
+<div class="layout">
+    <div class="sidebar">
+        <div class="section">
+            <div class="section-title">Actif</div>
+            <div class="symbol-input-row">
+                <select id="symbol">
+                    {% for s in symbols %}
+                    <option value="{{ s }}" {% if s == 'AAPL' %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+                <input type="text" id="symbol-custom" placeholder="ou saisir...">
+            </div>
+        </div>
+        <div class="section">
+            <div class="section-title">Periode</div>
+            <div class="range-row">
+                <label style="min-width:70px;margin:0">Depuis</label>
+                <input type="range" id="an" min="2000" max="2025" value="2018">
+                <span class="range-val" id="an-val">2018</span>
+            </div>
+            <label class="cb-item">
+                <input type="checkbox" id="cumulate" checked> Cumuler les annees
+            </label>
+        </div>
+        <div class="section">
+            <div class="section-title">Mode d'affichage</div>
+            <select id="mode" multiple>
+                <option value="Price" selected>Price</option>
+                <option value="SavGol">SavGol</option>
+                <option value="Volume">Volume</option>
+            </select>
+        </div>
+        <div class="section">
+            <div class="section-title">Zoom</div>
+            <div class="dates-row">
+                <div><label>Date debut</label><input type="date" id="zoom-date1" value="{{ current_year }}-01-01"></div>
+                <div><label>Date fin</label><input type="date" id="zoom-date2" value="{{ current_year }}-12-31"></div>
+            </div>
+            <div class="range-row">
+                <label style="min-width:70px;margin:0">Radius</label>
+                <input type="range" id="zoom-radius" min="1" max="10" step="0.1" value="1">
+                <span class="range-val" id="zoom-radius-val">1.0</span>
+            </div>
+        </div>
+        <div class="section">
+            <div class="section-title">Reglette</div>
+            <div class="range-row">
+                <label style="min-width:70px;margin:0">Jour</label>
+                <input type="range" id="day-of-year" min="0" max="366" value="0">
+                <span class="range-val" id="day-of-year-val">0</span>
+            </div>
+            <div class="range-row">
+                <label style="min-width:70px;margin:0">Annee</label>
+                <input type="number" id="annee" value="{{ current_year }}" min="2000" max="2030" style="width:80px">
+            </div>
+        </div>
+        <div class="section">
+            <div class="section-title">Parametres</div>
+            <div class="range-row">
+                <label style="min-width:90px;margin:0">Window</label>
+                <input type="range" id="win" min="3" max="90" value="37" step="2">
+                <span class="range-val" id="win-val">37</span>
+            </div>
+            <div class="range-row">
+                <label style="min-width:90px;margin:0">Win step</label>
+                <input type="range" id="win-step" min="1" max="30" value="1">
+                <span class="range-val" id="win-step-val">1</span>
+            </div>
+            <div class="range-row">
+                <label style="min-width:90px;margin:0">Smash Power</label>
+                <input type="number" id="smash-power" value="2" min="1" max="10" style="width:60px">
+            </div>
+            <div class="range-row">
+                <label style="min-width:90px;margin:0">Min corr</label>
+                <input type="range" id="min-corr" min="0" max="1" step="0.05" value="0.75">
+                <span class="range-val" id="min-corr-val">0.75</span>
+            </div>
+        </div>
+        <div class="section">
+            <div class="section-title">Options</div>
+            <div class="checkbox-grid">
+                <label class="cb-item"><input type="checkbox" id="exclude-covid"> Exclude COVID</label>
+                <label class="cb-item"><input type="checkbox" id="show-grids"> Hide Grids</label>
+                <label class="cb-item"><input type="checkbox" id="show-sl"> SL Long</label>
+                <label class="cb-item"><input type="checkbox" id="show-sl-short"> SL Short</label>
+                <label class="cb-item"><input type="checkbox" id="show-correlation"> Correlation</label>
+                <label class="cb-item"><input type="checkbox" id="show-interf-prod"> Interf. Prod</label>
+                <label class="cb-item"><input type="checkbox" id="show-interf-sum"> Interf. Sum</label>
+                <label class="cb-item"><input type="checkbox" id="show-heart-attack"> Heart Attack</label>
+                <label class="cb-item"><input type="checkbox" id="show-spir-m"> Spirality M</label>
+                <label class="cb-item"><input type="checkbox" id="show-spir-3m"> Spirality 3M</label>
+                <label class="cb-item"><input type="checkbox" id="show-spir-a"> Spirality A</label>
+            </div>
+        </div>
+        <div class="section">
+            <div class="section-title">Annees specifiques (vide = toutes)</div>
+            <div class="year-grid" id="year-grid">
+                <button class="year-btn" data-year="2017">2017</button>
+                <button class="year-btn" data-year="2018">2018</button>
+                <button class="year-btn" data-year="2019">2019</button>
+                <button class="year-btn" data-year="2020">2020</button>
+                <button class="year-btn" data-year="2021">2021</button>
+                <button class="year-btn" data-year="2022">2022</button>
+                <button class="year-btn" data-year="2023">2023</button>
+                <button class="year-btn" data-year="2024">2024</button>
+                <button class="year-btn" data-year="2025">2025</button>
+                <button class="year-btn" data-year="2026">2026</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div id="status-bar"></div>
+        <canvas id="polar" width="700" height="700"></canvas>
+        <div id="day-label"></div>
+        <div id="info-panel"></div>
+        <div id="corr-container"></div>
+    </div>
+</div>
+
+<script>
+// =====================================================================
+//  NOYB2 — Full client-side polar chart renderer
+// =====================================================================
+
+const canvas = document.getElementById('polar');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const CX = W / 2, CY = H / 2;
+const R_MAX_PX = Math.min(CX, CY) - 50; // max pixel radius
+
+// ---- Cached raw data from server ----
+let rawData = null;       // {dates, price, volume, savgol}
+let currentDataKey = '';  // "SYMBOL|START" to know when to refetch
+
+// =========================== MATH HELPERS ===========================
+
+function dateToAngle(dateStr) {
+    const d = new Date(dateStr);
+    const year = d.getFullYear();
+    const start = new Date(year, 0, 1);
+    const dayOfYear = Math.floor((d - start) / 86400000) + 1;
+    const daysInYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 366 : 365;
+    return dayOfYear * 2 * Math.PI / daysInYear;
+}
+
+function dayOfYear(dateStr) {
+    const d = new Date(dateStr);
+    const start = new Date(d.getFullYear(), 0, 1);
+    return Math.floor((d - start) / 86400000) + 1;
+}
+
+function yearOf(dateStr) { return new Date(dateStr).getFullYear(); }
+
+function daysInYear(y) {
+    return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 366 : 365;
+}
+
+function normalize(arr) {
+    let mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < arr.length; i++) {
+        if (arr[i] < mn) mn = arr[i];
+        if (arr[i] > mx) mx = arr[i];
+    }
+    const range = mx - mn || 1;
+    return arr.map(v => (v - mn) / range);
+}
+
+function fillNaN(a) {
+    a = a.slice(); // copy
+    // fill leading NaN
+    if (isNaN(a[0])) {
+        for (let i = 1; i < a.length; i++) { if (!isNaN(a[i])) { a[0] = a[i]; break; } }
+    }
+    // fill trailing NaN
+    if (isNaN(a[a.length - 1])) {
+        for (let i = a.length - 2; i >= 0; i--) { if (!isNaN(a[i])) { a[a.length - 1] = a[i]; break; } }
+    }
+    // fill middle NaN
+    let i = 1;
+    while (i < a.length - 1) {
+        if (isNaN(a[i])) {
+            let start = i;
+            while (i < a.length - 1 && isNaN(a[i])) i++;
+            const avg = (a[start - 1] + a[i]) / 2;
+            for (let j = start; j < i; j++) a[j] = avg;
+        }
+        i++;
+    }
+    return a;
+}
+
+function movingAverage(arr, win) {
+    const half = Math.floor(win / 2);
+    const result = new Array(arr.length).fill(NaN);
+    for (let i = half; i < arr.length - half; i++) {
+        let sum = 0, count = 0;
+        for (let j = i - half; j <= i + half; j++) {
+            if (!isNaN(arr[j])) { sum += arr[j]; count++; }
+        }
+        if (count > 0) result[i] = sum / count;
+    }
+    return result;
+}
+
+// ======================== DATA PROCESSING ===========================
+
+// Group data by year, returning {year -> {doy[], angles[], price[], savgol[], volume[]}}
+function groupByYear(data, indices) {
+    const groups = {};
+    for (const i of indices) {
+        const y = yearOf(data.dates[i]);
+        if (!groups[y]) groups[y] = { doy: [], angles: [], price: [], savgol: [], volume: [] };
+        groups[y].doy.push(dayOfYear(data.dates[i]));
+        groups[y].angles.push(dateToAngle(data.dates[i]));
+        groups[y].price.push(data.price[i]);
+        groups[y].savgol.push(data.savgol[i]);
+        groups[y].volume.push(data.volume[i]);
+    }
+    return groups;
+}
+
+// Pivot by day-of-year: returns {doy: 1..366, columns: {year -> values[366]}}
+function pivotByDOY(data, indices, field) {
+    const years = {};
+    for (const i of indices) {
+        const y = yearOf(data.dates[i]);
+        if (!years[y]) years[y] = new Array(366).fill(NaN);
+        const doy = dayOfYear(data.dates[i]);
+        years[y][doy - 1] = data[field][i];
+    }
+    // fill NaN for each year
+    const yearKeys = Object.keys(years).map(Number).sort();
+    for (const y of yearKeys) { years[y] = fillNaN(years[y]); }
+    return { yearKeys, columns: years };
+}
+
+function computeInterference(data, indices, option, win, winStep, smashPower) {
+    const pivot = pivotByDOY(data, indices, option === 'heart_attack' ? 'price' : 'savgol');
+    if (pivot.yearKeys.length < 2) return null;
+
+    // For each year: value - moving_avg, then normalize to [0,2]
+    const detrended = {};
+    for (const y of pivot.yearKeys) {
+        const ma = movingAverage(pivot.columns[y], win);
+        detrended[y] = pivot.columns[y].map((v, i) => isNaN(ma[i]) ? NaN : v - ma[i]);
+    }
+
+    if (option === 'heart_attack') {
+        // normalize to [-2, 2] then prod
+        const allVals = [];
+        for (const y of pivot.yearKeys) allVals.push(...detrended[y].filter(v => !isNaN(v)));
+        const mn = Math.min(...allVals), mx = Math.max(...allVals);
+        const range = mx - mn || 1;
+
+        const normed = {};
+        for (const y of pivot.yearKeys) {
+            normed[y] = detrended[y].map(v => isNaN(v) ? 0 : 4 * (v - mn) / range - 2);
+        }
+        const result = new Array(366).fill(1);
+        for (let d = 0; d < 366; d++) {
+            for (const y of pivot.yearKeys) result[d] *= normed[y][d];
+        }
+        const maxR = Math.max(...result);
+        if (maxR <= 1) return null;
+        // scale to price max
+        const priceMax = Math.max(...indices.map(i => data.price[i]));
+        const absMax = Math.max(...result.map(Math.abs));
+        return result.map(v => v / absMax * priceMax);
+    }
+
+    // normalize each year to [0,2]
+    const allVals = [];
+    for (const y of pivot.yearKeys) allVals.push(...detrended[y].filter(v => !isNaN(v)));
+    const mn = Math.min(...allVals), mx = Math.max(...allVals);
+    const range = mx - mn || 1;
+
+    const normed = {};
+    for (const y of pivot.yearKeys) {
+        normed[y] = detrended[y].map(v => isNaN(v) ? 0 : 2 * (v - mn) / range);
+    }
+
+    const priceMax = Math.max(...indices.map(i => data.price[i]));
+
+    if (option === 'prod') {
+        const result = new Array(366).fill(1);
+        for (let d = 0; d < 366; d++) {
+            for (const y of pivot.yearKeys) result[d] *= normed[y][d];
+        }
+        for (let d = 0; d < 366; d++) result[d] = Math.pow(result[d], smashPower);
+        const maxR = Math.max(...result);
+        if (maxR <= 1) return null;
+        const absMax = Math.max(...result.map(Math.abs));
+        return result.map(v => v / absMax * priceMax);
+    }
+
+    if (option === 'sum') {
+        const result = new Array(366).fill(0);
+        for (let d = 0; d < 366; d++) {
+            for (const y of pivot.yearKeys) result[d] += normed[y][d];
+        }
+        const absMax = Math.max(...result.map(Math.abs)) || 1;
+        return result.map(v => v / absMax * priceMax);
+    }
+    return null;
+}
+
+function computeSpirality(data, indices, option) {
+    // Monthly means of 30-day rolling average
+    const prices = indices.map(i => data.price[i]);
+    const dates = indices.map(i => data.dates[i]);
+    const angles = indices.map(i => dateToAngle(data.dates[i]));
+
+    const winSize = option === 'M' ? 30 : 90;
+    const ma = movingAverage(prices, winSize);
+
+    // Group by month
+    const monthlyBins = {};
+    for (let i = 0; i < dates.length; i++) {
+        if (isNaN(ma[i])) continue;
+        const d = new Date(dates[i]);
+        const key = d.getFullYear() * 100 + d.getMonth();
+        if (!monthlyBins[key]) monthlyBins[key] = { sum: 0, count: 0, midDate: null };
+        monthlyBins[key].sum += ma[i];
+        monthlyBins[key].count++;
+        if (!monthlyBins[key].midDate) monthlyBins[key].midDate = dates[i];
+    }
+
+    if (option === 'A') {
+        // Annual
+        const yearBins = {};
+        for (let i = 0; i < dates.length; i++) {
+            if (isNaN(ma[i])) continue;
+            const y = yearOf(dates[i]);
+            if (!yearBins[y]) yearBins[y] = { sum: 0, count: 0 };
+            yearBins[y].sum += ma[i];
+            yearBins[y].count++;
+        }
+        const yearKeys = Object.keys(yearBins).map(Number).sort();
+        const yearMeans = yearKeys.map(y => yearBins[y].sum / yearBins[y].count);
+        let ratioSum = 0, ratioCount = 0;
+        for (let i = 0; i < yearMeans.length - 1; i++) {
+            if (yearMeans[i] > 0) { ratioSum += yearMeans[i + 1] / yearMeans[i]; ratioCount++; }
+        }
+        const spirality = ratioCount > 0 ? ratioSum / ratioCount : 1;
+        return {
+            value: spirality,
+            prediction: Math.pow(spirality, 12),
+            maAngles: angles,
+            maValues: ma,
+            scatterAngles: yearKeys.map(y => dateToAngle(y + '-07-01')),
+            scatterValues: yearMeans,
+        };
+    }
+
+    const sortedKeys = Object.keys(monthlyBins).map(Number).sort();
+    const monthlyMeans = sortedKeys.map(k => monthlyBins[k].sum / monthlyBins[k].count);
+    const monthlyAngles = sortedKeys.map(k => {
+        const y = Math.floor(k / 100), m = k % 100;
+        return dateToAngle(new Date(y, m, 15).toISOString().slice(0, 10));
+    });
+
+    let ratioSum = 0, ratioCount = 0;
+    for (let i = 0; i < monthlyMeans.length - 1; i++) {
+        if (monthlyMeans[i] > 0) { ratioSum += monthlyMeans[i + 1] / monthlyMeans[i]; ratioCount++; }
+    }
+    const spirality = ratioCount > 0 ? ratioSum / ratioCount : 1;
+    const power = option === 'M' ? 1 : 3;
+
+    return {
+        value: spirality,
+        prediction: Math.pow(spirality, power),
+        maAngles: angles,
+        maValues: ma,
+        scatterAngles: monthlyAngles,
+        scatterValues: monthlyMeans,
+    };
+}
+
+function computeCorrelation(data, indices, minCorr) {
+    const pivot = pivotByDOY(data, indices, 'price');
+    if (pivot.yearKeys.length < 2) return null;
+
+    // Pearson correlation between each pair of years
+    const n = 366;
+    const years = pivot.yearKeys;
+    const matrix = {};
+    for (const y1 of years) {
+        matrix[y1] = {};
+        for (const y2 of years) {
+            const a = pivot.columns[y1], b = pivot.columns[y2];
+            let sumA = 0, sumB = 0, sumAB = 0, sumA2 = 0, sumB2 = 0, count = 0;
+            for (let i = 0; i < n; i++) {
+                if (isNaN(a[i]) || isNaN(b[i])) continue;
+                sumA += a[i]; sumB += b[i]; sumAB += a[i] * b[i];
+                sumA2 += a[i] * a[i]; sumB2 += b[i] * b[i]; count++;
+            }
+            if (count < 10) { matrix[y1][y2] = NaN; continue; }
+            const num = count * sumAB - sumA * sumB;
+            const den = Math.sqrt((count * sumA2 - sumA * sumA) * (count * sumB2 - sumB * sumB));
+            const r = den === 0 ? 0 : num / den;
+            matrix[y1][y2] = (minCorr != null && Math.abs(r) < minCorr) ? NaN : r;
+        }
+    }
+    return { years, matrix };
+}
+
+// ======================== CANVAS DRAWING ============================
+
+function polarToXY(angle, r, rMin, rMax) {
+    // angle: 0 = top (Jan), clockwise
+    // Map r from [rMin..rMax] to [0..R_MAX_PX]
+    const rPx = ((r - rMin) / (rMax - rMin || 1)) * R_MAX_PX;
+    // -PI/2 offset so 0 angle = top
+    const x = CX + rPx * Math.cos(angle - Math.PI / 2);
+    const y = CY + rPx * Math.sin(angle - Math.PI / 2);
+    return [x, y];
+}
+
+function drawCircle(angle, rVal, rMin, rMax, radius, color) {
+    const [x, y] = polarToXY(angle, rVal, rMin, rMax);
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+}
+
+function drawPolarLine(angles, values, rMin, rMax, color, lineWidth) {
+    ctx.beginPath();
+    let started = false;
+    for (let i = 0; i < angles.length; i++) {
+        if (isNaN(values[i])) continue;
+        const [x, y] = polarToXY(angles[i], values[i], rMin, rMax);
+        if (!started) { ctx.moveTo(x, y); started = true; }
+        else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+}
+
+function drawPolarFill(angles, values, rMin, rMax, color) {
+    if (angles.length < 2) return;
+    ctx.beginPath();
+    // start from center for the first angle
+    const [cx0, cy0] = polarToXY(angles[0], rMin, rMin, rMax);
+    ctx.moveTo(cx0, cy0);
+    for (let i = 0; i < angles.length; i++) {
+        if (isNaN(values[i])) continue;
+        const [x, y] = polarToXY(angles[i], values[i], rMin, rMax);
+        ctx.lineTo(x, y);
+    }
+    // close back to center at last angle
+    const [cxL, cyL] = polarToXY(angles[angles.length - 1], rMin, rMin, rMax);
+    ctx.lineTo(cxL, cyL);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+}
+
+function drawRadialLine(angle, rMin, rMax, rMinData, rMaxData, color, lineWidth, dash) {
+    const [x1, y1] = polarToXY(angle, rMinData, rMin, rMax);
+    const [x2, y2] = polarToXY(angle, rMaxData, rMin, rMax);
+    ctx.beginPath();
+    ctx.setLineDash(dash || []);
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function drawConstantRadius(rVal, rMin, rMax, thetaMin, thetaMax, color, lineWidth) {
+    const rPx = ((rVal - rMin) / (rMax - rMin || 1)) * R_MAX_PX;
+    const a1 = thetaMin - Math.PI / 2;
+    const a2 = thetaMax - Math.PI / 2;
+    ctx.beginPath();
+    ctx.arc(CX, CY, rPx, a1, a2);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+}
+
+function drawGrid(rMin, rMax, thetaMin, thetaMax, hideGrids) {
+    if (hideGrids) return;
+
+    // Radial grid circles
+    const numCircles = 5;
+    for (let i = 1; i <= numCircles; i++) {
+        const r = rMin + (rMax - rMin) * i / numCircles;
+        const rPx = (i / numCircles) * R_MAX_PX;
+        ctx.beginPath();
+        ctx.arc(CX, CY, rPx, thetaMin - Math.PI / 2, thetaMax - Math.PI / 2);
+        ctx.strokeStyle = 'rgba(48, 54, 61, 0.6)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+        // label
+        ctx.fillStyle = '#8b949e';
+        ctx.font = '10px monospace';
+        const [lx, ly] = polarToXY(thetaMin, r, rMin, rMax);
+        ctx.fillText(r.toFixed(1), lx + 4, ly);
+    }
+
+    // Month labels
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    for (let m = 0; m < 12; m++) {
+        const angle = m * 2 * Math.PI / 12;
+        if (angle < thetaMin - 0.1 || angle > thetaMax + 0.1) continue;
+        // draw spoke
+        drawRadialLine(angle, rMin, rMax, rMin, rMax, 'rgba(48,54,61,0.4)', 0.5);
+        // label
+        const [lx, ly] = polarToXY(angle, rMax * 1.08, rMin, rMax * 1.15);
+        ctx.fillStyle = '#c9d1d9';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(months[m], lx, ly);
+    }
+}
+
+// ======================== MAIN RENDER ===============================
+
+function render() {
+    if (!rawData) return;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const an = +$('an').value;
+    const modes = Array.from($('mode').selectedOptions).map(o => o.value);
+    const cumulate = $('cumulate').checked;
+    const excludeCovid = $('exclude-covid').checked;
+    const hideGrids = $('show-grids').checked;
+    const showSL = $('show-sl').checked;
+    const showSLShort = $('show-sl-short').checked;
+    const showCorr = $('show-correlation').checked;
+    const showInterfProd = $('show-interf-prod').checked;
+    const showInterfSum = $('show-interf-sum').checked;
+    const showHA = $('show-heart-attack').checked;
+    const showSpirM = $('show-spir-m').checked;
+    const showSpir3M = $('show-spir-3m').checked;
+    const showSpirA = $('show-spir-a').checked;
+    const dayOY = +$('day-of-year').value;
+    const annee = +$('annee').value;
+    const win = +$('win').value;
+    const winStep = +$('win-step').value;
+    const smashPower = +$('smash-power').value;
+    const minCorr = +$('min-corr').value;
+    const zoomRadius = +$('zoom-radius').value;
+    const zoomDate1 = $('zoom-date1').value;
+    const zoomDate2 = $('zoom-date2').value;
+
+    // Selected years filter
+    const selectedYears = [];
+    document.querySelectorAll('.year-btn.active').forEach(b => selectedYears.push(+b.dataset.year));
+
+    // Build filtered index list
+    let indices = [];
+    for (let i = 0; i < rawData.dates.length; i++) {
+        const y = yearOf(rawData.dates[i]);
+        if (selectedYears.length > 0 && !selectedYears.includes(y)) continue;
+        if (excludeCovid && (y === 2021 || y === 2022)) continue;
+        indices.push(i);
+    }
+    if (indices.length === 0) return;
+
+    // Indices for plot (cumulate or single year)
+    let plotIndices = indices;
+    if (!cumulate) {
+        plotIndices = indices.filter(i => yearOf(rawData.dates[i]) === an);
+    }
+    if (plotIndices.length === 0) plotIndices = indices;
+
+    // Compute data range
+    let priceMin = Infinity, priceMax = -Infinity;
+    for (const i of plotIndices) {
+        if (rawData.price[i] < priceMin) priceMin = rawData.price[i];
+        if (rawData.price[i] > priceMax) priceMax = rawData.price[i];
+    }
+
+    // Zoom theta range
+    let thetaMin = 0, thetaMax = 2 * Math.PI;
+    try {
+        const a1 = dateToAngle(zoomDate1);
+        const a2 = dateToAngle(zoomDate2);
+        // adjust like notebook: date1 angle - Jan 1st angle
+        thetaMin = a1 - dateToAngle(new Date().getFullYear() + '-01-01');
+        if (thetaMin < 0) thetaMin = 0;
+        thetaMax = a2;
+    } catch (e) {}
+
+    // Zoom radius
+    const rMaxZoom = (priceMin - priceMax * 1.05) / 9 * zoomRadius + (10 * priceMax * 1.05 - priceMin) / 9;
+    const rMin = 0;
+    const rMax = rMaxZoom;
+
+    // Draw grid
+    drawGrid(rMin, rMax, thetaMin, thetaMax, hideGrids);
+
+    // Group by year for fill_between
+    const groups = groupByYear(rawData, plotIndices);
+
+    for (const [yearStr, g] of Object.entries(groups)) {
+        const year = +yearStr;
+        const color = (year === 2021 || year === 2022) ? 'rgba(255,60,60,0.25)' : 'rgba(70,130,240,0.25)';
+        const colorLine = (year === 2021 || year === 2022) ? 'rgba(255,60,60,0.5)' : 'rgba(70,130,240,0.5)';
+
+        if (modes.includes('Price')) {
+            drawPolarFill(g.angles, g.price, rMin, rMax, color);
+        }
+        if (modes.includes('SavGol')) {
+            drawPolarFill(g.angles, g.savgol, rMin, rMax, color);
+        }
+        if (modes.includes('Volume')) {
+            const volMin = Math.min(...g.volume);
+            const volMax = Math.max(...g.volume) || 1;
+            const volNorm = g.volume.map(v => (v - volMin) / (volMax) * priceMax);
+            drawPolarFill(g.angles, volNorm, rMin, rMax, color);
+        }
+    }
+
+    // SL circles
+    if (showSL) {
+        const lastPrice = rawData.price[indices[indices.length - 1]];
+        for (const lev of [1, 2, 5]) {
+            const sl = lastPrice * (1 - 1 / (2 * lev));
+            drawConstantRadius(sl, rMin, rMax, 0, 2 * Math.PI, 'rgba(255,80,80,0.6)', 1);
+        }
+    }
+    if (showSLShort) {
+        const lastPrice = rawData.price[indices[indices.length - 1]];
+        for (const lev of [1, 2, 5]) {
+            const sl = lastPrice * (1 + 1 / (2 * lev));
+            drawConstantRadius(sl, rMin, rMax, 0, 2 * Math.PI, 'rgba(80,120,255,0.6)', 1);
+        }
+    }
+
+    // Day-of-year ruler
+    if (dayOY > 0) {
+        const doyAngle = dayOY * 2 * Math.PI / 366;
+        // arc from 0 to dayOY
+        const arcEnd = doyAngle;
+        drawConstantRadius(priceMax, rMin, rMax, 0, arcEnd, '#58a6ff', 1.5);
+        // radial line
+        drawRadialLine(doyAngle, rMin, rMax, rMin, priceMax, '#58a6ff', 1.5);
+        // dot
+        drawCircle(doyAngle, priceMax, rMin, rMax, 4, '#58a6ff');
+        // date label
+        try {
+            const dt = new Date(annee, 0, dayOY);
+            $('day-label').textContent = 'Date : ' + dt.toLocaleDateString('fr-FR', {day:'2-digit', month:'short', year:'numeric'});
+        } catch(e) {}
+    } else {
+        $('day-label').textContent = '';
+    }
+
+    // Today line
+    const todayAngle = dateToAngle(new Date().toISOString().slice(0, 10));
+    drawRadialLine(todayAngle, rMin, rMax, rMin, priceMax, '#58a6ff', 0.5, [4, 4]);
+
+    // Interferences
+    if (showInterfProd) {
+        const ip = computeInterference(rawData, indices, 'prod', win, winStep, smashPower);
+        if (ip) {
+            const angles366 = [];
+            for (let d = 1; d <= 366; d++) angles366.push(d * 2 * Math.PI / 366);
+            const filtered = [], filteredA = [];
+            for (let i = 0; i < 366; i++) {
+                if (ip[i] !== 0) { filtered.push(ip[i]); filteredA.push(angles366[i]); }
+            }
+            drawPolarLine(filteredA, filtered, rMin, rMax, '#4488ff', 2);
+        }
+    }
+    if (showInterfSum) {
+        const is_ = computeInterference(rawData, indices, 'sum', win, winStep, smashPower);
+        if (is_) {
+            const angles366 = [];
+            for (let d = 1; d <= 366; d++) angles366.push(d * 2 * Math.PI / 366);
+            drawPolarLine(angles366, is_, rMin, rMax, '#e0e0e0', 2);
+        }
+    }
+    if (showHA) {
+        const iha = computeInterference(rawData, indices, 'heart_attack', win, winStep, smashPower);
+        if (iha) {
+            const maxP = Math.max(...indices.map(i => rawData.price[i]));
+            const scaled = iha.map(v => v / 2 + maxP / 2);
+            const angles366 = [];
+            for (let d = 1; d <= 366; d++) angles366.push(d * 2 * Math.PI / 366);
+            drawPolarLine(angles366, scaled, rMin, rMax, '#ff4444', 2);
+        }
+    }
+
+    // Spirality
+    const infoLines = [];
+    if (showSpirM || showSpir3M || showSpirA || true) {
+        try {
+            const sm = computeSpirality(rawData, indices, 'M');
+            infoLines.push(`Spirality M: ${sm.value.toFixed(6)}`);
+            if (showSpirM) {
+                drawPolarLine(sm.maAngles, sm.maValues, rMin, rMax, '#e0e0e0', 1);
+                for (let i = 0; i < sm.scatterAngles.length; i++) {
+                    if (!isNaN(sm.scatterValues[i]))
+                        drawCircle(sm.scatterAngles[i], sm.scatterValues[i], rMin, rMax, 4, '#e0e0e0');
+                }
+            }
+        } catch(e) {}
+        try {
+            const s3 = computeSpirality(rawData, indices, '3M');
+            infoLines.push(`Spirality 3M: ${s3.value.toFixed(6)}  |  prediction: ${s3.prediction.toFixed(6)}`);
+            if (showSpir3M) {
+                drawPolarLine(s3.maAngles, s3.maValues, rMin, rMax, '#e0e0e0', 1);
+                for (let i = 0; i < s3.scatterAngles.length; i++) {
+                    if (!isNaN(s3.scatterValues[i]))
+                        drawCircle(s3.scatterAngles[i], s3.scatterValues[i], rMin, rMax, 4, '#e0e0e0');
+                }
+            }
+        } catch(e) {}
+        try {
+            const sa = computeSpirality(rawData, indices, 'A');
+            infoLines.push(`Spirality A: ${sa.value.toFixed(6)}  |  prediction: ${sa.prediction.toFixed(6)}`);
+            if (showSpirA) {
+                drawPolarLine(sa.maAngles, sa.maValues, rMin, rMax, '#e0e0e0', 1);
+                for (let i = 0; i < sa.scatterAngles.length; i++) {
+                    if (!isNaN(sa.scatterValues[i]))
+                        drawCircle(sa.scatterAngles[i], sa.scatterValues[i], rMin, rMax, 4, '#e0e0e0');
+                }
+            }
+        } catch(e) {}
+    }
+
+    // Title
+    let sym = $('symbol').value;
+    const cust = $('symbol-custom').value.trim();
+    if (cust) sym = cust.toUpperCase();
+    ctx.fillStyle = '#c9d1d9';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${sym}  (${an} - present)`, CX, 24);
+
+    // Info panel
+    $('info-panel').innerHTML = infoLines.map(l => `<div class="info-line">${l}</div>`).join('');
+
+    // Correlation
+    if (showCorr) {
+        const corr = computeCorrelation(rawData, indices, minCorr);
+        if (corr) {
+            let html = '<table class="corr-table"><tr><th></th>';
+            for (const y of corr.years) html += `<th>${y}</th>`;
+            html += '</tr>';
+            for (const y1 of corr.years) {
+                html += `<tr><th>${y1}</th>`;
+                for (const y2 of corr.years) {
+                    const v = corr.matrix[y1][y2];
+                    html += `<td>${isNaN(v) ? '' : v.toFixed(2)}</td>`;
+                }
+                html += '</tr>';
+            }
+            html += '</table>';
+            $('corr-container').innerHTML = html;
+        } else {
+            $('corr-container').innerHTML = '';
+        }
+    } else {
+        $('corr-container').innerHTML = '';
+    }
+}
+
+// ======================== DATA LOADING ==============================
+
+function $(id) { return document.getElementById(id); }
+
+async function loadData() {
+    let symbol = $('symbol').value;
+    const custom = $('symbol-custom').value.trim();
+    if (custom) symbol = custom.toUpperCase();
+    const an = $('an').value;
+    const key = symbol + '|' + an;
+
+    if (key === currentDataKey && rawData) {
+        render();
+        return;
+    }
+
+    $('status-bar').textContent = `Chargement ${symbol} depuis ${an}...`;
+    $('status-bar').className = 'loading';
+
+    try {
+        const resp = await fetch(`/api/data?symbol=${encodeURIComponent(symbol)}&start=${an}`);
+        if (!resp.ok) {
+            const d = await resp.json();
+            $('status-bar').textContent = d.error || 'Erreur';
+            $('status-bar').className = 'error';
+            return;
+        }
+        rawData = await resp.json();
+        currentDataKey = key;
+        $('status-bar').textContent = `${symbol} — ${rawData.dates.length} jours charges`;
+        $('status-bar').className = '';
+        render();
+    } catch (e) {
+        $('status-bar').textContent = 'Erreur reseau: ' + e.message;
+        $('status-bar').className = 'error';
+    }
+}
+
+// ======================== EVENT BINDINGS =============================
+
+// Controls that need data reload (symbol or start year change)
+const dataControls = ['symbol', 'an'];
+// symbol-custom needs debounce
+$('symbol').addEventListener('change', loadData);
+$('an').addEventListener('change', loadData);
+
+$('symbol-custom').addEventListener('keydown', e => { if (e.key === 'Enter') loadData(); });
+let customTimer = null;
+$('symbol-custom').addEventListener('input', () => {
+    clearTimeout(customTimer);
+    customTimer = setTimeout(loadData, 800);
+});
+
+// Range display bindings
+const rangeBindings = [
+    ['an', 'an-val', v => v],
+    ['zoom-radius', 'zoom-radius-val', v => parseFloat(v).toFixed(1)],
+    ['day-of-year', 'day-of-year-val', v => v],
+    ['win', 'win-val', v => v],
+    ['win-step', 'win-step-val', v => v],
+    ['min-corr', 'min-corr-val', v => parseFloat(v).toFixed(2)],
+];
+rangeBindings.forEach(([inputId, displayId, fmt]) => {
+    const el = $(inputId), disp = $(displayId);
+    el.addEventListener('input', () => {
+        disp.textContent = fmt(el.value);
+        // Instant re-render for visual-only sliders (not 'an' which needs data)
+        if (inputId !== 'an') render();
+    });
+});
+
+// All other controls: instant re-render (no data fetch)
+const renderControls = [
+    'cumulate', 'exclude-covid', 'show-grids', 'show-sl', 'show-sl-short',
+    'show-correlation', 'show-interf-prod', 'show-interf-sum', 'show-heart-attack',
+    'show-spir-m', 'show-spir-3m', 'show-spir-a',
+    'mode', 'zoom-date1', 'zoom-date2', 'annee', 'smash-power',
+];
+renderControls.forEach(id => {
+    $(id).addEventListener('change', render);
+    $(id).addEventListener('input', render);
+});
+
+// Year buttons
+document.querySelectorAll('.year-btn').forEach(btn => {
+    btn.addEventListener('click', () => { btn.classList.toggle('active'); render(); });
+});
+
+// ---- Initial load ----
+loadData();
+</script>
+
+</body>
+</html>
